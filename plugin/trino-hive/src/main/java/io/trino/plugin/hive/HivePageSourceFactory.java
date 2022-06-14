@@ -36,6 +36,7 @@ public interface HivePageSourceFactory
             Properties schema,
             List<HiveColumnHandle> columns,
             TupleDomain<HiveColumnHandle> effectivePredicate,
+            TupleDomain<HiveColumnHandle> arrayContainsPredicate,
             Optional<AcidInfo> acidInfo,
             OptionalInt bucketNumber,
             boolean originalFile,

@@ -225,6 +225,7 @@ public abstract class AbstractFileFormat
                         schema,
                         readColumns,
                         TupleDomain.all(),
+                        TupleDomain.all(),
                         Optional.empty(),
                         OptionalInt.empty(),
                         false,

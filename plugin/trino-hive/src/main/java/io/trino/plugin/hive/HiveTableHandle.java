@@ -49,6 +49,7 @@ public class HiveTableHandle
     private final Optional<List<String>> partitionNames;
     private final Optional<List<HivePartition>> partitions;
     private final TupleDomain<HiveColumnHandle> compactEffectivePredicate;
+    private final TupleDomain<HiveColumnHandle> arrayContainsPredicate;
     private final TupleDomain<ColumnHandle> enforcedConstraint;
     private final Optional<HiveBucketHandle> bucketHandle;
     private final Optional<HiveBucketFilter> bucketFilter;
@@ -67,6 +68,7 @@ public class HiveTableHandle
             @JsonProperty("partitionColumns") List<HiveColumnHandle> partitionColumns,
             @JsonProperty("dataColumns") List<HiveColumnHandle> dataColumns,
             @JsonProperty("compactEffectivePredicate") TupleDomain<HiveColumnHandle> compactEffectivePredicate,
+            @JsonProperty("arrayContainsPredicate") TupleDomain<HiveColumnHandle> arrayContainsPredicate,
             @JsonProperty("enforcedConstraint") TupleDomain<ColumnHandle> enforcedConstraint,
             @JsonProperty("bucketHandle") Optional<HiveBucketHandle> bucketHandle,
             @JsonProperty("bucketFilter") Optional<HiveBucketFilter> bucketFilter,
@@ -83,6 +85,7 @@ public class HiveTableHandle
                 Optional.empty(),
                 Optional.empty(),
                 compactEffectivePredicate,
+                arrayContainsPredicate,
                 enforcedConstraint,
                 bucketHandle,
                 bucketFilter,
@@ -113,6 +116,7 @@ public class HiveTableHandle
                 Optional.empty(),
                 TupleDomain.all(),
                 TupleDomain.all(),
+                TupleDomain.all(),
                 bucketHandle,
                 Optional.empty(),
                 Optional.empty(),
@@ -133,6 +137,7 @@ public class HiveTableHandle
             Optional<List<String>> partitionNames,
             Optional<List<HivePartition>> partitions,
             TupleDomain<HiveColumnHandle> compactEffectivePredicate,
+            TupleDomain<HiveColumnHandle> arrayContainsPredicate,
             TupleDomain<ColumnHandle> enforcedConstraint,
             Optional<HiveBucketHandle> bucketHandle,
             Optional<HiveBucketFilter> bucketFilter,
@@ -153,6 +158,7 @@ public class HiveTableHandle
         this.partitionNames = requireNonNull(partitionNames, "partitionNames is null").map(ImmutableList::copyOf);
         this.partitions = requireNonNull(partitions, "partitions is null").map(ImmutableList::copyOf);
         this.compactEffectivePredicate = requireNonNull(compactEffectivePredicate, "compactEffectivePredicate is null");
+        this.arrayContainsPredicate = requireNonNull(arrayContainsPredicate, "arrayContainsPredicate is null");
         this.enforcedConstraint = requireNonNull(enforcedConstraint, "enforcedConstraint is null");
         this.bucketHandle = requireNonNull(bucketHandle, "bucketHandle is null");
         this.bucketFilter = requireNonNull(bucketFilter, "bucketFilter is null");
@@ -176,6 +182,7 @@ public class HiveTableHandle
                 partitionNames,
                 partitions,
                 compactEffectivePredicate,
+                arrayContainsPredicate,
                 enforcedConstraint,
                 bucketHandle,
                 bucketFilter,
@@ -199,6 +206,7 @@ public class HiveTableHandle
                 partitionNames,
                 partitions,
                 compactEffectivePredicate,
+                arrayContainsPredicate,
                 enforcedConstraint,
                 bucketHandle,
                 bucketFilter,
@@ -222,6 +230,7 @@ public class HiveTableHandle
                 partitionNames,
                 partitions,
                 compactEffectivePredicate,
+                arrayContainsPredicate,
                 enforcedConstraint,
                 bucketHandle,
                 bucketFilter,
@@ -246,6 +255,7 @@ public class HiveTableHandle
                 partitionNames,
                 partitions,
                 compactEffectivePredicate,
+                arrayContainsPredicate,
                 enforcedConstraint,
                 bucketHandle,
                 bucketFilter,
@@ -269,6 +279,7 @@ public class HiveTableHandle
                 partitionNames,
                 partitions,
                 compactEffectivePredicate,
+                arrayContainsPredicate,
                 enforcedConstraint,
                 bucketHandle,
                 bucketFilter,
@@ -292,6 +303,7 @@ public class HiveTableHandle
                 partitionNames,
                 partitions,
                 compactEffectivePredicate,
+                arrayContainsPredicate,
                 enforcedConstraint,
                 bucketHandle,
                 bucketFilter,
@@ -315,6 +327,7 @@ public class HiveTableHandle
                 partitionNames,
                 partitions,
                 compactEffectivePredicate,
+                arrayContainsPredicate,
                 enforcedConstraint,
                 bucketHandle,
                 bucketFilter,
@@ -385,6 +398,12 @@ public class HiveTableHandle
     public TupleDomain<HiveColumnHandle> getCompactEffectivePredicate()
     {
         return compactEffectivePredicate;
+    }
+
+    @JsonProperty
+    public TupleDomain<HiveColumnHandle> getArrayContainsPredicate()
+    {
+        return arrayContainsPredicate;
     }
 
     @JsonProperty

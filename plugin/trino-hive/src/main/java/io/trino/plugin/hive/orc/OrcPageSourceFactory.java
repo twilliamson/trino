@@ -171,6 +171,7 @@ public class OrcPageSourceFactory
             Properties schema,
             List<HiveColumnHandle> columns,
             TupleDomain<HiveColumnHandle> effectivePredicate,
+            TupleDomain<HiveColumnHandle> arrayContainsPredicate,
             Optional<AcidInfo> acidInfo,
             OptionalInt bucketNumber,
             boolean originalFile,
@@ -202,6 +203,7 @@ public class OrcPageSourceFactory
                 isUseOrcColumnNames(session),
                 isFullAcidTable(Maps.fromProperties(schema)),
                 effectivePredicate,
+                arrayContainsPredicate,
                 legacyTimeZone,
                 orcReaderOptions
                         .withMaxMergeDistance(getOrcMaxMergeDistance(session))
@@ -234,6 +236,7 @@ public class OrcPageSourceFactory
             boolean useOrcColumnNames,
             boolean isFullAcid,
             TupleDomain<HiveColumnHandle> effectivePredicate,
+            TupleDomain<HiveColumnHandle> arrayContainsPredicate,
             DateTimeZone legacyFileTimeZone,
             OrcReaderOptions options,
             Optional<AcidInfo> acidInfo,
@@ -333,11 +336,13 @@ public class OrcPageSourceFactory
                     .setDomainCompactionThreshold(domainCompactionThreshold);
             Map<HiveColumnHandle, Domain> effectivePredicateDomains = effectivePredicate.getDomains()
                     .orElseThrow(() -> new IllegalArgumentException("Effective predicate is none"));
+            Map<HiveColumnHandle, Domain> arrayContainsDomains = arrayContainsPredicate.getDomains().orElse(ImmutableMap.of());
             List<ColumnAdaptation> columnAdaptations = new ArrayList<>(columns.size());
             for (HiveColumnHandle column : columns) {
                 OrcColumn orcColumn = null;
                 OrcReader.ProjectedLayout projectedLayout = null;
                 Map<Optional<HiveColumnProjectionInfo>, Domain> columnDomains = null;
+                Map<HiveColumnHandle, Domain> columnArrayContains = null;
 
                 if (useOrcColumnNames || isFullAcid) {
                     String columnName = column.getName().toLowerCase(ENGLISH);
@@ -347,6 +352,9 @@ public class OrcPageSourceFactory
                         columnDomains = effectivePredicateDomains.entrySet().stream()
                                 .filter(columnDomain -> columnDomain.getKey().getBaseColumnName().toLowerCase(ENGLISH).equals(columnName))
                                 .collect(toImmutableMap(columnDomain -> columnDomain.getKey().getHiveColumnProjectionInfo(), Map.Entry::getValue));
+                        columnArrayContains = arrayContainsDomains.entrySet().stream()
+                                .filter(columnDomain -> columnDomain.getKey().getBaseColumnName().toLowerCase(ENGLISH).equals(columnName))
+                                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue));
                     }
                 }
                 else if (column.getBaseHiveColumnIndex() < fileColumns.size()) {
@@ -356,6 +364,9 @@ public class OrcPageSourceFactory
                         columnDomains = effectivePredicateDomains.entrySet().stream()
                                 .filter(columnDomain -> columnDomain.getKey().getBaseHiveColumnIndex() == column.getBaseHiveColumnIndex())
                                 .collect(toImmutableMap(columnDomain -> columnDomain.getKey().getHiveColumnProjectionInfo(), Map.Entry::getValue));
+                        columnArrayContains = arrayContainsDomains.entrySet().stream()
+                                .filter(columnDomain -> columnDomain.getKey().getBaseHiveColumnIndex() == column.getBaseHiveColumnIndex())
+                                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue));
                     }
                 }
 
@@ -372,6 +383,21 @@ public class OrcPageSourceFactory
                         OrcColumn nestedColumn = getNestedColumn(orcColumn, columnDomain.getKey());
                         if (nestedColumn != null) {
                             predicateBuilder.addColumn(nestedColumn.getColumnId(), columnDomain.getValue());
+                        }
+                    }
+
+                    // Add predicates for array elements.
+                    // ORC stores the elements of an array separately in a nested column, with each
+                    // row's array concatenated one after another, and the base column containing the
+                    // run-length of each array. This means we can take things like:
+                    //   contains(my_array_column, 123)
+                    // and turn that into the predicate:
+                    //   ".my_array_column.item must contain 123"
+                    // This is especially useful for bloom filters, but also applies to min/max ranges on stripes.
+                    for (Map.Entry<HiveColumnHandle, Domain> columnDomain : columnArrayContains.entrySet()) {
+                        if (orcColumn.getColumnType() == OrcTypeKind.LIST) {
+                            OrcColumn itemColumn = orcColumn.getNestedColumns().get(0);
+                            predicateBuilder.addColumn(itemColumn.getColumnId(), columnDomain.getValue());
                         }
                     }
                 }

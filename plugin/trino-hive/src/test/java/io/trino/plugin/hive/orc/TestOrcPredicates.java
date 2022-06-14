@@ -228,6 +228,7 @@ public class TestOrcPredicates
                 split.getLength(),
                 splitProperties,
                 predicate,
+                TupleDomain.all(),
                 columnHandles,
                 TESTING_TYPE_MANAGER,
                 Optional.empty(),
@@ -241,4 +242,6 @@ public class TestOrcPredicates
         assertTrue(pageSource.isPresent());
         return pageSource.get();
     }
+
+    // TODO TODO TODO add test for arrayContainsPredicate
 }

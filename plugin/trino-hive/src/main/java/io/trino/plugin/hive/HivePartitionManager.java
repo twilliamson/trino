@@ -26,14 +26,23 @@ import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.expression.Call;
+import io.trino.spi.expression.ConnectorExpression;
+import io.trino.spi.expression.Constant;
+import io.trino.spi.expression.FunctionName;
+import io.trino.spi.expression.Variable;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.Type;
 import org.apache.hadoop.hive.common.FileUtils;
 
 import javax.inject.Inject;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +56,7 @@ import static io.trino.plugin.hive.metastore.MetastoreUtil.computePartitionKeyFi
 import static io.trino.plugin.hive.metastore.MetastoreUtil.toPartitionName;
 import static io.trino.plugin.hive.util.HiveBucketing.getHiveBucketFilter;
 import static io.trino.plugin.hive.util.HiveUtil.parsePartitionValue;
+import static io.trino.spi.expression.StandardFunctions.AND_FUNCTION_NAME;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 
@@ -199,6 +209,7 @@ public class HivePartitionManager
                 partitionNames,
                 partitionList,
                 partitions.getCompactEffectivePredicate(),
+                extractArrayContainsPredicate(constraint.getExpression(), handle.getDataColumns()),
                 enforcedConstraint,
                 partitions.getBucketHandle(),
                 partitions.getBucketFilter(),
@@ -209,6 +220,73 @@ public class HivePartitionManager
                 handle.getTransaction(),
                 handle.isRecordScannedFiles(),
                 handle.getMaxScannedFileSize());
+    }
+
+    private TupleDomain<HiveColumnHandle> extractArrayContainsPredicate(ConnectorExpression expression, List<HiveColumnHandle> dataColumns)
+    {
+        Map<HiveColumnHandle, Domain> containsDomains = new HashMap<>();
+        Deque<ConnectorExpression> candidates = new ArrayDeque<>();
+
+        candidates.add(expression);
+
+        // Looks for contains(some_array, some_constant) and extracts that into a tuple domain.
+        // This is useful for efficiently filtering certain column-oriented formats that store
+        // arrays as a concatenated list of elements in an otherwise normal-looking primitive row.
+        // For example, see OrcPageSourceFactory.
+        while (!candidates.isEmpty()) {
+            ConnectorExpression candidate = candidates.remove();
+
+            if (!(candidate instanceof Call)) {
+                continue;
+            }
+
+            FunctionName functionName = ((Call) candidate).getFunctionName();
+
+            if (AND_FUNCTION_NAME.equals(functionName)) {
+                candidates.addAll(candidate.getChildren());
+                continue;
+            }
+
+            if (functionName.getCatalogSchema().isPresent() || !"contains".equals(functionName.getName())) {
+                continue;
+            }
+
+            List<ConnectorExpression> arguments = ((Call) candidate).getArguments();
+            if (arguments.size() != 2) {
+                continue;
+            }
+
+            ConnectorExpression array = arguments.get(0);
+            if (!(array instanceof Variable) || !(array.getType() instanceof ArrayType)) {
+                continue;
+            }
+
+            ConnectorExpression element = arguments.get(1);
+            Type elementType = ((ArrayType) array.getType()).getElementType();
+            if (!(element instanceof Constant) || !elementType.equals(element.getType())) {
+                continue;
+            }
+
+            String columnName = ((Variable) array).getName();
+            Optional<HiveColumnHandle> column = dataColumns.stream().filter(c -> c.isBaseColumn() && c.getName().equals(columnName)).findFirst();
+            if (column.isEmpty()) {
+                continue;
+            }
+
+            Object value = ((Constant) element).getValue();
+            if (value == null) {
+                continue;
+            }
+
+            Domain domain = Domain.singleValue(element.getType(), value);
+            containsDomains.merge(column.get(), domain, Domain::union);
+        }
+
+        if (containsDomains.isEmpty()) {
+            return TupleDomain.all();
+        }
+
+        return TupleDomain.withColumnDomains(containsDomains).simplify(domainCompactionThreshold);
     }
 
     public List<HivePartition> getOrLoadPartitions(SemiTransactionalHiveMetastore metastore, HiveTableHandle table)

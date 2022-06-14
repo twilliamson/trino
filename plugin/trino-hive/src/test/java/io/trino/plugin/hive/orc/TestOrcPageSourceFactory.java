@@ -239,6 +239,7 @@ public class TestOrcPageSourceFactory
                 createSchema(),
                 columnHandles,
                 tupleDomain,
+                TupleDomain.all(),
                 acidInfo,
                 OptionalInt.empty(),
                 false,

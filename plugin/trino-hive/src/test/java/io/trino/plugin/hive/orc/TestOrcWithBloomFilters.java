@@ -69,6 +69,22 @@ public class TestOrcWithBloomFilters
         assertUpdate("DROP TABLE " + tableName);
     }
 
+    @Test
+    public void testOrcBloomFilterWithArrayColumn()
+    {
+        String tableName = "insert_orc_with_bloom_filters_" + randomTableSuffix();
+        assertUpdate(
+                format(
+                        "CREATE TABLE %s (prices ARRAY<INTEGER>) WITH (%s)",
+                        tableName,
+                        "orc_bloom_filter_columns = ARRAY['prices'], bucketed_by = ARRAY['prices'], bucket_count = 1"));
+        assertUpdate(format("INSERT INTO %s SELECT array[totalprice] FROM tpch.tiny.orders", tableName), 15000);
+
+        // `totalprice 51890 is chosen to lie between min/max values of row group
+        assertBloomFilterBasedRowGroupPruning(format("SELECT * FROM %s WHERE contains(prices, 51890)", tableName));
+        assertUpdate("DROP TABLE " + tableName);
+    }
+
     private String getTableProperties(String bloomFilterColumnName, String bucketingColumnName, String sortByColumnName)
     {
         return format(

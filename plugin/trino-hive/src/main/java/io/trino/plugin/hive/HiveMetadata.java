@@ -2894,6 +2894,7 @@ public class HiveMetadata
                 hiveTable.getPartitionNames(),
                 hiveTable.getPartitions(),
                 hiveTable.getCompactEffectivePredicate(),
+                hiveTable.getArrayContainsPredicate(),
                 hiveTable.getEnforcedConstraint(),
                 Optional.of(new HiveBucketHandle(
                         bucketHandle.getColumns(),

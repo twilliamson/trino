@@ -118,6 +118,7 @@ public class TestTimestampMicros
                 schema,
                 List.of(createBaseColumn(columnName, 0, columnHiveType, columnType, REGULAR, Optional.empty())),
                 TupleDomain.all(),
+                TupleDomain.all(),
                 Optional.empty(),
                 OptionalInt.empty(),
                 false,
